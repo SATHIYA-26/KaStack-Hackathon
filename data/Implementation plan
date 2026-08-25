@@ -1,0 +1,110 @@
+# Semantic Communication System - Complete Architecture & Split of Work
+
+This document outlines the detailed system structure, modules, packet design, database schema, and split of work across phases for our local, low-resource semantic communication prototype.
+
+---
+
+## 1. System Structure (Files & Modules)
+
+```
+semantic-communication/
+├── app/
+│   ├── __init__.py
+│   ├── main.py          # API Endpoints (POST /encode, POST /decode, POST /validate, GET /history, GET /)
+│   ├── extractor.py     # Semantic extraction logic (Normal vs Low-Resource)
+│   ├── encoder.py       # Compact packet serializer (UTF-8 bytes, key mapping)
+│   ├── decoder.py       # Reconstructs natural language from packet keys
+│   ├── validator.py     # Semantic comparison engine (SAFE, REVIEW_REQUIRED, FAILED)
+│   └── database.py      # SQLite connection & queries (storing communication workflows)
+├── tests/
+│   ├── __init__.py
+│   └── test_semantic.py # Automated test cases (pytest)
+├── data/
+│   └── semantic.db      # Local SQLite database (git-ignored)
+├── requirements.txt
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 2. Semantic Packet Design (Short Keys)
+
+To minimize the size of the transmitted packet (the primary objective of semantic communication), we map semantic fields to short 1-2 character JSON keys:
+
+| Full Field | Short Key | Type | Description / Example |
+| :--- | :--- | :--- | :--- |
+| **intent** | `i` | String | Extracted verb/action (e.g., `send`, `cancel`, `alert`) |
+| **person** | `p` | String | Target individual or role (e.g., `officer`, `john`) |
+| **object** | `o` | String | Target object of action (e.g., `package`, `water`, `truck`) |
+| **quantity**| `q` | Integer | Exact count (e.g., `5`, `100`) |
+| **location**| `l` | String | Place name (e.g., `Chennai`, `Sector-4`) |
+| **date** | `d` | String | ISO Date format `YYYY-MM-DD` (e.g., `2026-08-26`) |
+| **time** | `t` | String | 24h Time format `HH:MM` (e.g., `15:00`) |
+| **negation**| `n` | Boolean | True if negation is detected (e.g., `do not`, `cancel`, `never`) |
+| **urgency** | `u` | Boolean | True if urgent (e.g., `urgent`, `asap`, `immediately`) |
+| **warning** | `w` | Boolean | True if threat/warning (e.g., `warning`, `danger`, `alert`) |
+
+---
+
+## 3. Split of Work (Phases)
+
+### Phase 1: Extractor + Encoder (`extractor.py` & `encoder.py`)
+*   **Task**: Parse natural-language text to identify keywords (intents, objects, locations) and numbers (quantities, dates/times). Convert to compact packet.
+*   **Heuristics**:
+    *   **Intent**: Match verbs against a predefined map (e.g., "send", "deliver", "ship" -> `send`).
+    *   **Negation**: Look for negation words ("not", "don't", "no", "never", "stop").
+    *   **Urgency/Warning**: Look for words like "asap", "immediately", "danger", "warning", "critical".
+    *   **Quantity**: Use regex (`\b\d+\b` or word numbers like "five") to extract counts.
+    *   **Locations**: Look for capitalized words, matching specific known locations or entities.
+    *   **Dates & Times**: Parse relative date/time terms ("tomorrow", "at 3 PM") and format to ISO/24h dynamically using local time `2026-08-25` as reference.
+
+### Phase 2: Semantic Decoder (`decoder.py`)
+*   **Task**: Transform the short-keyed JSON packet back into a grammatically readable sentence.
+*   **Template Reconstitution**:
+    *   Build string templates dynamically based on present keys.
+    *   *Rule*: If negation `n` is `True`, template starts with warning/negation phrasing: `"Do not [intent]..."` or `"Warning: Do not [intent]..."`.
+    *   *Rule*: Order elements logically: `[Negation?] [Intent] [Quantity] [Object] [Person?] to [Location] on [Date] at [Time] [Urgency?]`.
+
+### Phase 3: Meaning Validator (`validator.py`)
+*   **Task**: Parse both original and reconstructed strings and compare their extracted semantics.
+*   **Evaluation Rules**:
+    *   **FAILED**: If intent, quantity, location, date, time, warning, or negation mismatch.
+    *   **REVIEW_REQUIRED**: If the reconstructed message includes invented elements not in the original (e.g. location added), or missing optional details.
+    *   **SAFE**: If all critical fields match exactly.
+
+### Phase 4: Benchmarking (Integrated inside `main.py`)
+*   **Task**: Compute latencies and sizes:
+    *   `original_bytes`: UTF-8 size of original string.
+    *   `packet_bytes`: UTF-8 size of JSON packet.
+    *   `compression_percentage = ((original_bytes - packet_bytes) / original_bytes) * 100`.
+    *   `latency`: `time.perf_counter()` differential for encode & decode.
+
+### Phase 5: SQLite Database (`database.py` & `semantic.db`)
+*   **Table Schema**: `messages`
+    *   `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+    *   `original_message` (TEXT)
+    *   `semantic_packet` (TEXT - JSON representation)
+    *   `decoded_message` (TEXT)
+    *   `original_bytes` (INTEGER)
+    *   `packet_bytes` (INTEGER)
+    *   `compression_percentage` (REAL)
+    *   `encoding_latency_ms` (REAL)
+    *   `decoding_latency_ms` (REAL)
+    *   `processing_mode` (TEXT - 'normal' or 'low_resource')
+    *   `validation_result` (TEXT - 'safe', 'review_required', 'failed')
+    *   `created_at` (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+### Phase 6: Normal Mode vs. Low-Resource Mode
+*   **Low-Resource Mode**: Simple fast regex + keyword scanning.
+*   **Normal Mode**: Multi-pass extraction (regex + basic part-of-speech context / vocabulary dictionaries) for higher accuracy.
+
+### Phase 7: Testing (`test_semantic.py` using `pytest`)
+*   Define a robust suite covering 10 required test categories (negations, mismatches, safety alerts).
+
+---
+
+## 4. Verification & Testing Strategy
+*   We will run `pytest` inside the virtual environment:
+    `.\.venv\Scripts\pytest -v`
+*   Endpoints will be tested using local HTTP client or FastAPI docs.
