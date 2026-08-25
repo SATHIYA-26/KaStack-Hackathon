@@ -2,7 +2,7 @@ import spacy
 import re
 import json
 
-# --- Initialization ---
+# Initialization
 print("Loading local NLP model...")
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -24,31 +24,31 @@ def extract_low_resource(text: str) -> dict:
         "negation": False, "urgency": False, "warning": False
     }
 
-    # 1. Strict Boolean Checks (Regex)
+    # Strict Boolean Checks (Regex)
     semantics["negation"] = bool(re.search(r"\b(not|never|don't|cannot|stop|abort|no|cancel)\b", text_lower))
     semantics["urgency"] = bool(re.search(r"\b(urgent|asap|immediately|critical|quick)\b", text_lower))
     semantics["warning"] = bool(re.search(r"\b(warning|danger|alert|threat)\b", text_lower))
 
-    # 2. Keyword Scanning for Intents & Objects (No AI)
+    # Keyword Scanning for Intents & Objects (No AI)
     common_intents = ["send", "deliver", "restart", "update", "cancel", "schedule"]
     for intent in common_intents:
         if intent in text_lower:
             semantics["intent"] = intent
             break
             
-    # 3. Regex for Quantity
+    # Regex for Quantity
     qty_match = re.search(r"\b(\d+)\b", text_lower)
     if qty_match:
         semantics["quantity"] = int(qty_match.group(1))
 
-    # 4. Keyword Scanning for Known Locations
+    # Keyword Scanning for Known Locations
     known_locations = ["chennai", "london", "data center", "office", "hq"]
     for loc in known_locations:
         if loc in text_lower:
             semantics["location"] = loc.title()
             break
 
-    # 5. Regex Date & Time parsing
+    # Regex Date & Time parsing
     if "tomorrow" in text_lower: semantics["date"] = "2026-08-26"
     elif "today" in text_lower: semantics["date"] = "2026-08-25"
 
@@ -140,10 +140,10 @@ def semantic_encode(text: str, mode: str = "normal") -> tuple:
 
 if __name__ == "__main__":
     msg = "Warning: Do not restart the database server immediately."
-    print("--- NORMAL MODE (AI) ---")
+    print("NORMAL MODE (AI)")
     p1, o1, pack1 = semantic_encode(msg, mode="normal")
     print(p1)
     
-    print("\n--- LOW RESOURCE MODE (Regex Only) ---")
+    print("\nLOW RESOURCE MODE (Regex Only)")
     p2, o2, pack2 = semantic_encode(msg, mode="low_resource")
     print(p2)
