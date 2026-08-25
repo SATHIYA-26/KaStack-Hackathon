@@ -16,7 +16,7 @@ def _pluralize(word: str, quantity) -> str:
 
 
 def _object_clause(quantity, obj: str | None) -> str | None:
-    if quantity and obj:
+    if quantity is not None and obj:
         return f"{quantity} {_pluralize(obj, quantity)}"
     if obj:
         return obj

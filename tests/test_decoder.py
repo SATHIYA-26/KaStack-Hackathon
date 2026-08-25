@@ -108,6 +108,11 @@ def test_decode_preserves_critical_meaning(message_id, original, packet, require
         )
 
 
+def test_decode_preserves_explicit_zero_quantity():
+    decoded = decode_packet({"i": "order", "q": 0, "o": "size S mask"}).lower()
+    assert "0" in decoded, f"expected zero quantity to be preserved, got: {decoded!r}"
+
+
 def test_decode_handles_empty_packet():
     assert decode_packet({}) == "Process."
 
