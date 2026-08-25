@@ -6,7 +6,13 @@ class EncodeRequest(BaseModel):
     mode: Literal["normal", "low_resource"] = "normal"
 
 class DecodeRequest(BaseModel):
-    semantic_packet: Dict[str, Any] = Field(..., description="The semantic packet representation")
+    packet: Dict[str, Any] = Field(..., description="The semantic packet to decode")
+    mode: str = Field(default="normal", pattern="^(normal|low_resource)$")
+
+class DecodeResponse(BaseModel):
+    decoded_message: str
+    decoding_latency_ms: float
+    mode: str
 
 class ValidateRequest(BaseModel):
     original: str = Field(..., min_length=1, description="The original input message")
